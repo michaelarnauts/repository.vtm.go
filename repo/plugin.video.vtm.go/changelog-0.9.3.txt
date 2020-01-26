@@ -1,0 +1,3 @@
+v0.9.3 (26/01/2020)
+- Implement profiles and upgrade VTM GO API
+- Added fanart

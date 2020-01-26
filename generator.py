@@ -7,6 +7,7 @@
 
 import hashlib
 import os
+import xml.etree.ElementTree as ET
 from functools import cmp_to_key
 from zipfile import ZipFile
 
@@ -25,7 +26,6 @@ class AddonsGenerator:
         xmls = []
         # Loop over all addons
         for addon_path in self._get_addons(path):
-            addon_folder_name = os.path.basename(addon_path)
 
             # Loop over all files of this addon
             index = 0
@@ -34,12 +34,14 @@ class AddonsGenerator:
                 # Skip when we have the requested previous_versions
                 if index > previous_versions:
                     break
-                if addon_file.endswith('.zip'):
-                    with ZipFile(os.path.join(addon_path, addon_file)) as f:
-                        xmls.append(self._clean_xml(
-                            f.read(addon_folder_name + '/addon.xml').decode('utf-8')
-                        ))
-                    index += 1
+                # Skip non-zip files
+                if not addon_file.endswith('.zip'):
+                    continue
+
+                xmls.append(
+                    self._process_addon_zip(addon_path, addon_file, index == 0)
+                )
+                index += 1
 
         # Generate XML
         addons_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<addons>\n'
@@ -49,6 +51,32 @@ class AddonsGenerator:
         # Save the XML file
         with open(addons_file, 'w', encoding='utf-8') as f:
             f.write(addons_xml)
+
+    def _process_addon_zip(self, addon_path, addon_file, copy=False):
+        """ Process the specified zip file of the specified addon. """
+        addon_folder_name = os.path.basename(addon_path)
+
+        with ZipFile(os.path.join(addon_path, addon_file)) as z:
+            xml = z.read(os.path.join(addon_folder_name, 'addon.xml')).decode('utf-8')
+
+            # Copy out some files from the latest release.
+            metadata = self.parse_metadata(xml)
+
+            # Copy out the changelog if it exists
+            if metadata['changelog']:
+                with open(os.path.join(addon_path, 'changelog-%s.txt' % metadata['version']), 'wb') as f:
+                    f.write(metadata['changelog'].encode('utf-8'))
+
+            if copy:
+                # Copy out the icon
+                with open(os.path.join(addon_path, os.path.basename(metadata['icon'])), 'wb') as f:
+                    f.write(z.read(os.path.join(addon_folder_name, metadata['icon'])))
+
+                # Copy out the fanart
+                # with open(os.path.join(addon_path, os.path.basename(metadata['fanart'])), 'wb') as f:
+                #     f.write(z.read(os.path.join(addon_folder_name, metadata['fanart'])))
+
+        return self._clean_xml(xml)
 
     @staticmethod
     def _get_addons(path):
@@ -76,6 +104,24 @@ class AddonsGenerator:
             else:
                 return 1
         return 0
+
+    @staticmethod
+    def parse_metadata(xml):
+        """ Parse an addon.xml and return the metadata. """
+        tree = ET.fromstring(xml)  # type: xml.etree.ElementTree.Element
+
+        metadata = {
+            'name': tree.get('id'),
+            'version': tree.get('version'),
+            'icon': tree.find("./extension[@point='xbmc.addon.metadata']/assets/icon").text,
+            'fanart': tree.find("./extension[@point='xbmc.addon.metadata']/assets/fanart").text,
+        }
+
+        # Parse optional news section
+        changes = tree.find("./extension[@point='xbmc.addon.metadata']/news")
+        metadata['changelog'] = changes.text.strip() if changes is not None else None
+
+        return metadata
 
     @staticmethod
     def _clean_xml(xml):
