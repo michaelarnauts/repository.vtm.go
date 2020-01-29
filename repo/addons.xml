@@ -25,8 +25,8 @@
         </news>
         <source>https://github.com/michaelarnauts/plugin.video.vtm.go</source>
         <assets>
-            <icon>resources/icon.png</icon>
-            <fanart>resources/fanart.png</fanart>
+            <icon>icon.png</icon>
+            <fanart>fanart.png</fanart>
         </assets>
         <reuselanguageinvoker>true</reuselanguageinvoker>
     </extension>

@@ -7,6 +7,7 @@
 
 import hashlib
 import os
+import re
 import xml.etree.ElementTree as ET
 from functools import cmp_to_key
 from zipfile import ZipFile
@@ -20,7 +21,7 @@ class AddonsGenerator:
         self.generate_md5(os.path.join(path, 'addons.xml'), os.path.join(path, 'addons.xml.md5'))
 
     def generate_addons_xml(self, path, previous_versions=0):
-        # Initial XML directive
+        """ Generate the addons.xml file and extract assets. """
         addons_file = os.path.join(path, 'addons.xml')
 
         xmls = []
@@ -31,7 +32,7 @@ class AddonsGenerator:
             index = 0
             addon_files = sorted(os.listdir(addon_path), key=cmp_to_key(self._file_compare_version), reverse=True)
             for addon_file in addon_files:
-                # Skip when we have the requested previous_versions
+                # Stop when we have the requested previous_versions
                 if index > previous_versions:
                     break
                 # Skip non-zip files
@@ -59,7 +60,7 @@ class AddonsGenerator:
         with ZipFile(os.path.join(addon_path, addon_file)) as z:
             xml = z.read(os.path.join(addon_folder_name, 'addon.xml')).decode('utf-8')
 
-            # Copy out some files from the latest release.
+            # Parse thie metadata from addon.xml
             metadata = self.parse_metadata(xml)
 
             # Copy out the changelog if it exists
@@ -73,8 +74,12 @@ class AddonsGenerator:
                     f.write(z.read(os.path.join(addon_folder_name, metadata['icon'])))
 
                 # Copy out the fanart
-                # with open(os.path.join(addon_path, os.path.basename(metadata['fanart'])), 'wb') as f:
-                #     f.write(z.read(os.path.join(addon_folder_name, metadata['fanart'])))
+                with open(os.path.join(addon_path, os.path.basename(metadata['fanart'])), 'wb') as f:
+                    f.write(z.read(os.path.join(addon_folder_name, metadata['fanart'])))
+
+        # Modify the XML so the icon paths are correct
+        xml = re.sub(r'(?<=<icon>).*(?=</icon>)', os.path.basename(metadata['icon']), xml)
+        xml = re.sub(r'(?<=<fanart>).*(?=</fanart>)', os.path.basename(metadata['fanart']), xml)
 
         return self._clean_xml(xml)
 
